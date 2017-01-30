@@ -299,7 +299,7 @@ author='@author@'
 # The short version of the program name which is used in logging output
 program="$(basename "$0")"
 # The place where we put the files we're building
-staging_dir="$(mktemp -t --directory "$program-XXXX")"
+staging_dir="${HAB_PKG_DEB_STAGING_DIR:="$(mktemp -t --directory "$program-XXXX")"}"
 
 parse_options "$@"
 build_deb
