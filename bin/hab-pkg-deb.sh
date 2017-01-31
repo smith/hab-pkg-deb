@@ -109,22 +109,22 @@ build_deb() {
   # Make a DEBIAN directory
   mkdir -p "$staging_dir/DEBIAN"
 
-	# Set these variables in advance, since they may or may not be in the manifest,
-	# since they are optional
-	pkg_description=
-	pkg_license=
-	pkg_maintainer=
-	pkg_upstream_url=
+  # Set these variables in advance, since they may or may not be in the manifest,
+  # since they are optional
+  pkg_description=
+  pkg_license=
+  pkg_maintainer=
+  pkg_upstream_url=
 
-	# Read the manifest to extract variables from it
-	manifest="$(cat "$staging_dir"/hab/pkgs/"$PKG"/**/**/MANIFEST)"
+  # Read the manifest to extract variables from it
+  manifest="$(cat "$staging_dir"/hab/pkgs/"$PKG"/**/**/MANIFEST)"
 
-	# TODO: Handle multi-line descriptions
-	# FIXME: This probably fail when there's a ":" in them
-	pkg_description="$(grep __Description__: <<< "$manifest" | cut -d ":" -f2 | sed 's/^ *//g')"
-	pkg_license="$(grep __License__: <<< "$manifest" | cut -d ":" -f2 | sed 's/^ *//g')"
-	pkg_maintainer="$(grep __Maintainer__: <<< "$manifest" | cut -d ":" -f2 | sed 's/^ *//g')"
-	pkg_upstream_url="$(grep __Upstream\ URL__: <<< "$manifest" | cut -d ":" -f2 | sed 's/^ *//g')"
+  # TODO: Handle multi-line descriptions
+  # FIXME: This probably fail when there's a ":" in them
+  pkg_description="$(grep __Description__: <<< "$manifest" | cut -d ":" -f2 | sed 's/^ *//g')"
+  pkg_license="$(grep __License__: <<< "$manifest" | cut -d ":" -f2 | sed 's/^ *//g')"
+  pkg_maintainer="$(grep __Maintainer__: <<< "$manifest" | cut -d ":" -f2 | sed 's/^ *//g')"
+  pkg_upstream_url="$(grep __Upstream\ URL__: <<< "$manifest" | cut -d ":" -f2 | sed 's/^ *//g')"
 
 	# Get the ident and the origin and release from that
   ident="$(cat "$staging_dir"/hab/pkgs/"$PKG"/**/**/IDENT)"
@@ -143,7 +143,7 @@ build_deb() {
   render_md5sums > "$staging_dir/DEBIAN/md5sums"
 
   # Create the package
-	# TODO: Do we do something with the origin here?
+  # TODO: Do we do something with the origin here?
   dpkg-deb -z9 -Zgzip --debug --build "$staging_dir" \
 		"$(safe_base_package_name)_$(safe_version)-${pkg_release}_$(architecture).deb"
 }
@@ -166,30 +166,30 @@ EOF
 # TODO: Format the description correctly
 # See https://www.debian.org/doc/debian-policy/ch-controlfields.html#s-f-Description
 if [[ ! -z $pkg_description ]]; then
-	control="$control
+  control="$control
 Description: $pkg_description"
 # Description is required, so just use the package name if we don't have one
 else
-	control="$control
+  control="$control
 Description: $pkg_name"
 fi
 
 if [[ ! -z $pkg_upstream_url ]]; then
-	control="$control
+  control="$control
 Homepage: $pkg_upstream_url"
 fi
 
 if [[ ! -z $pkg_license ]]; then
-	control="$control
+  control="$control
 License: $pkg_license"
 fi
 
 if [[ ! -z $pkg_maintainer ]]; then
-	control="$control
+  control="$control
 Maintainer: $pkg_maintainer"
 # Maintainer is required, so use the origin if we don't have one
 else
-	control="$control
+  control="$control
 Maintainer: $pkg_origin"
 fi
 
@@ -198,7 +198,7 @@ echo "$control"
 
 render_md5sums() {
   pushd "$staging_dir" > /dev/null
-    find . -type f ! -regex '.*?DEBIAN.*' -printf '%P ' | xargs md5sum
+    find . -type f ! -regex '.*?DEBIAN.*' -exec md5sum {} +
   popd > /dev/null
 }
 
@@ -224,7 +224,7 @@ safe_base_package_name() {
 safe_version() {
   if [[ $pkg_version == *"-"* ]]; then
     converted="${pkg_version//-/\~}"
-		warn "Dashes hold special significance in the Debian package versions. "
+    warn "Dashes hold special significance in the Debian package versions. "
     warn "Versions that contain a dash and should be considered an earlier "
     warn "version (e.g. pre-releases) may actually be ordered as later "
     warn "(e.g. 12.0.0-rc.6 > 12.0.0). We'll work around this by replacing "
