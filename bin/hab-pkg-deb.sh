@@ -143,7 +143,6 @@ build_deb() {
   render_md5sums > "$staging_dir/DEBIAN/md5sums"
 
   # Create the package
-  # TODO: Do we do something with the origin here?
   dpkg-deb -z9 -Zgzip --debug --build "$staging_dir" \
 		"$(safe_base_package_name)_$(safe_version)-${pkg_release}_$(architecture).deb"
 }
@@ -205,15 +204,16 @@ render_md5sums() {
 # Return the Debian-ready base package name, converting any invalid characters to
 # dashes (-).
 safe_base_package_name() {
-  if [[ $pkg_name =~ ^[a-z0-9\.\+\\-]+$ ]]; then
-    echo "$pkg_name"
+  name="$pkg_origin-$pkg_name"
+  if [[ $name =~ ^[a-z0-9\.\+\\-]+$ ]]; then
+    echo "$name"
   else
-    converted="${pkg_name,,}"
+    converted="${name,,}"
     # FIXME: I'm doing this regex wrong
     converted="${converted//[^a-z0-9\.\+\-]+/-}"
     warn "The 'name' component of Debian package names can only include "
     warn "lower case alphabetical characters (a-z), numbers (0-9), dots (.), "
-    warn "plus signs (+), and dashes (-). Converting '$pkg_name' to "
+    warn "plus signs (+), and dashes (-). Converting '$name' to "
     warn "'$converted'."
     echo "$converted"
   fi
