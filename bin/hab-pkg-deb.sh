@@ -3,7 +3,7 @@
 # # Usage
 #
 # ```
-# $ hab-pkg-deb [PKG ...]
+# $ hab-pkg-deb [--replaces=PKG] [PKG ...]
 # ```
 #
 # # Synopsis
@@ -60,6 +60,7 @@ USAGE:
 
 FLAGS:
     --help           Prints help information
+    --replaces=PKG   Package that this replaces
 
 ARGS:
     <PKG_IDENT>      Habitat package identifier (ex: acme/redis)
@@ -149,7 +150,7 @@ build_deb() {
 
 # Output the contents of the "control" file
 render_control_file() {
-# TODO: Depends/conflicts/replaces
+# TODO: Depends/conflicts/provides, etc. See https://www.debian.org/doc/debian-policy/ch-relationships.html
 # TODO: Should vendor be the origin or not?
 control=$(cat <<EOF
 Package: $(safe_base_package_name)
@@ -190,6 +191,16 @@ Maintainer: $pkg_maintainer"
 else
   control="$control
 Maintainer: $pkg_origin"
+fi
+
+# Replaces implies Breaks (sometimes it doesn't, but for the simple use cases
+# we handle here it does.)
+#
+# See https://www.debian.org/doc/debian-policy/ch-relationships.html#s7.6.1
+if [[ ! -z $replaces ]]; then
+  control="$control
+Breaks: $replaces
+Replaces: $replaces"
 fi
 
 echo "$control"
@@ -277,6 +288,9 @@ parse_options() {
       --help)
         print_help
         exit
+        ;;
+      --replaces=*)
+        replaces="${i#*=}"
         ;;
       *)
         PKG=${i}
