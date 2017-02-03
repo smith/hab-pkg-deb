@@ -193,13 +193,8 @@ else
 Maintainer: $pkg_origin"
 fi
 
-# Replaces implies Breaks (sometimes it doesn't, but for the simple use cases
-# we handle here it does.)
-#
-# See https://www.debian.org/doc/debian-policy/ch-relationships.html#s7.6.1
 if [[ ! -z $replaces ]]; then
   control="$control
-Breaks: $replaces
 Replaces: $replaces"
 fi
 
@@ -243,7 +238,7 @@ safe_version() {
     warn "to '$converted'."
     echo "$converted"
 	else
-  	echo "$pkg_version"
+    echo "$pkg_version"
 	fi
 }
 
