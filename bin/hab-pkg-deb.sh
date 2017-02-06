@@ -2,9 +2,7 @@
 #
 # # Usage
 #
-# ```
-# $ hab-pkg-deb [--replaces=PKG] [PKG ...]
-# ```
+# See the `print_help` function.
 #
 # # Synopsis
 #
@@ -32,8 +30,15 @@
 # Everything in this script was shamelessy and gratefully copied from
 # hab-pkg-dockerize, hab-pkg-tarize, and omnibus/packagers/deb.rb.
 
-# defaults for the application
-: "${PKG:="unknown"}"
+# Default variables
+pkg=
+preinst=
+postinst=
+prerm=
+postrm=
+conflicts=
+provides=
+replaces=
 
 # Fail if there are any unset variables and whenever a command returns a
 # non-zero exit code.
@@ -56,14 +61,23 @@ $author
 Habitat Package Debian - Create a Debian package from a set of Habitat packages
 
 USAGE:
-  $program [FLAGS] <PKG_IDENT>
+  $program [FLAGS] [OPTIONS] <PKG_IDENT_OR_ARTIFACT>
 
 FLAGS:
-    --help           Prints help information
+    -h, --help       Prints help information
+    -V, --version    Prints version information
+
+OPTIONS:
+    --preinst=FILE   File name of script called before installation
+    --postinst=FILE  File name of script called after installation
+    --prerm=FILE     File name of script called before removal
+    --postrm=FILE    File name of script called after removal
+    --conflicts=PKG  Package that this conflicts with
+    --provides=PKG   Name of facility this package provides
     --replaces=PKG   Package that this replaces
 
 ARGS:
-    <PKG_IDENT>      Habitat package identifier (ex: acme/redis)
+    <PKG_IDENT_OR_ARTIFACT>  Habitat package identifier (ex: acme/redis)
 "
 }
 
@@ -103,8 +117,8 @@ warn() {
 
 # Build the debian package
 build_deb() {
-  # Install packages using the studio
-  env FS_ROOT="$staging_dir" hab pkg install "$PKG"
+  # Install packages into the staging dir
+  env FS_ROOT="$staging_dir" hab pkg install "$pkg"
   # Delete files we won't be needing
   rm -rf "${staging_dir:?}/hab/cache"
   # Make a DEBIAN directory
@@ -118,7 +132,7 @@ build_deb() {
   pkg_upstream_url=
 
   # Read the manifest to extract variables from it
-  manifest="$(cat "$staging_dir"/hab/pkgs/"$PKG"/**/**/MANIFEST)"
+  manifest="$(cat "$staging_dir"/hab/pkgs/"$pkg"/**/**/MANIFEST)"
 
   # TODO: Handle multi-line descriptions
   # FIXME: This probably fail when there's a ":" in them
@@ -128,7 +142,7 @@ build_deb() {
   pkg_upstream_url="$(grep __Upstream\ URL__: <<< "$manifest" | cut -d ":" -f2 | sed 's/^ *//g')"
 
 	# Get the ident and the origin and release from that
-  ident="$(cat "$staging_dir"/hab/pkgs/"$PKG"/**/**/IDENT)"
+  ident="$(cat "$staging_dir"/hab/pkgs/"$pkg"/**/**/IDENT)"
 
   pkg_origin="$(echo "$ident" | cut -f1 -d/)"
   pkg_name="$(echo "$ident" | cut -f2 -d/)"
@@ -139,7 +153,8 @@ build_deb() {
   render_control_file > "$staging_dir/DEBIAN/control"
 
   # TODO: Write conffiles file
-  # TODO: Write scripts dir
+
+  write_scripts
 
   render_md5sums > "$staging_dir/DEBIAN/md5sums"
 
@@ -193,6 +208,16 @@ else
 Maintainer: $pkg_origin"
 fi
 
+if [[ ! -z $conflicts ]]; then
+  control="$control
+Conflicts: $conflicts"
+fi
+
+if [[ ! -z $provides ]]; then
+  control="$control
+Provides: $provides"
+fi
+
 if [[ ! -z $replaces ]]; then
   control="$control
 Replaces: $replaces"
@@ -242,6 +267,19 @@ safe_version() {
 	fi
 }
 
+write_scripts() {
+  for script_name in preinst postinst prerm postrm; do
+    eval "file_name=\$$script_name"
+    if [[ -n $file_name ]]; then
+      if [[ -f $file_name ]]; then
+        install -v -m 0755 "$file_name" "$staging_dir/DEBIAN/$script_name"
+      else
+        exit_with "$script_name script '$file_name' not found" 1
+      fi
+    fi
+  done
+}
+
 # The platform architecture.
 architecture() {
   dpkg --print-architecture
@@ -277,31 +315,70 @@ section() {
 
 # Parse the CLI flags and options
 parse_options() {
-  for i in "$@"
-  do
-    case $i in
-      --help)
+  opts="$(getopt \
+    --longoptions help,version:,preinst:,postinst:,prerm:,postrm:,replaces: \
+    --name "$program" --options h::,V::,R:: -- "$@" \
+  )"
+  eval set -- "$opts"
+
+  while :; do
+    case "$1" in
+      -h | --help)
         print_help
         exit
         ;;
-      --replaces=*)
-        replaces="${i#*=}"
+      -v | --version)
+        echo "$program $version"
+        exit
+        ;;
+      --preinst)
+        preinst=$2
+        shift 2
+        ;;
+      --postinst)
+        postinst=$2
+        shift 2
+        ;;
+      --prerm)
+        prerm=$2;
+        shift 2
+        ;;
+      --postrm)
+        postrm=$2
+        shift 2
+        ;;
+      --conflicts)
+        provides=$2
+        shift 2
+        ;;
+      --provides)
+        provides=$2
+        shift 2
+        ;;
+      --replaces)
+        replaces=$2
+        shift 2
+        ;;
+      --)
+        shift
+        pkg=$*
+        break
         ;;
       *)
-        PKG=${i}
+        exit_with "Unknown error" 1
         ;;
     esac
   done
-  if [ "$PKG" == "unknown" ]; then
+  if [ -z "$pkg" ] || [ "$pkg" = "--" ]; then
     print_help
-    exit_with "You must specify one or more Habitat packages." 1
+    exit_with "You must specify a Habitat package." 1
   fi
 }
 
 # Adjust the $PATH to make sure we're using the right binaries
 PATH=$(hab pkg path core/tar)/bin:$(hab pkg path core/findutils)/bin:$(hab pkg path core/coreutils)/bin:$PATH
 
-# The current version of Habitat Studio
+# The current version of Habitat this program
 version='@version@'
 # The author of this program
 author='@author@'
@@ -311,4 +388,5 @@ program="$(basename "$0")"
 staging_dir="${HAB_PKG_DEB_STAGING_DIR:="$(mktemp -t --directory "$program-XXXX")"}"
 
 parse_options "$@"
+
 build_deb
