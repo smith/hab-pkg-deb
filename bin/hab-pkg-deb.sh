@@ -39,6 +39,7 @@ postrm=
 conflicts=
 provides=
 replaces=
+_safe_version=
 
 # Fail if there are any unset variables and whenever a command returns a
 # non-zero exit code.
@@ -232,39 +233,32 @@ render_md5sums() {
   popd > /dev/null
 }
 
-# Return the Debian-ready base package name, converting any invalid characters to
-# dashes (-).
+# The name converted to all lowercase to be compatible with Debian naming
+# conventions
 safe_base_package_name() {
-  name="$pkg_origin-$pkg_name"
-  if [[ $name =~ ^[a-z0-9\.\+\\-]+$ ]]; then
-    echo "$name"
-  else
-    converted="${name,,}"
-    # FIXME: I'm doing this regex wrong
-    converted="${converted//[^a-z0-9\.\+\-]+/-}"
-    warn "The 'name' component of Debian package names can only include "
-    warn "lower case alphabetical characters (a-z), numbers (0-9), dots (.), "
-    warn "plus signs (+), and dashes (-). Converting '$name' to "
-    warn "'$converted'."
-    echo "$converted"
-  fi
+  echo "${pkg_origin,,}-${pkg_name,,}"
 }
 
 # Return the Debian-ready version, replacing all dashes (-) with tildes
 # (~) and converting any invalid characters to underscores (_).
 safe_version() {
+  if [[ -n "$_safe_version" ]]; then
+    echo "$_safe_version"
+    return 0
+  fi
+
   if [[ $pkg_version == *"-"* ]]; then
-    converted="${pkg_version//-/\~}"
+    _safe_version="${pkg_version//-/\~}"
     warn "Dashes hold special significance in the Debian package versions. "
     warn "Versions that contain a dash and should be considered an earlier "
     warn "version (e.g. pre-releases) may actually be ordered as later "
     warn "(e.g. 12.0.0-rc.6 > 12.0.0). We'll work around this by replacing "
     warn "dashes (-) with tildes (~). Converting '$pkg_version' "
-    warn "to '$converted'."
-    echo "$converted"
+    warn "to '$_safe_version'."
 	else
-    echo "$pkg_version"
+    _safe_version="$pkg_version"
 	fi
+  echo "$_safe_version"
 }
 
 write_scripts() {
@@ -316,8 +310,8 @@ section() {
 # Parse the CLI flags and options
 parse_options() {
   opts="$(getopt \
-    --longoptions help,version:,preinst:,postinst:,prerm:,postrm:,replaces: \
-    --name "$program" --options h::,V::,R:: -- "$@" \
+    --longoptions help,version,preinst:,postinst:,prerm:,postrm:,conflicts:,provides:,replaces: \
+    --name "$program" --options h,V -- "$@" \
   )"
   eval set -- "$opts"
 
@@ -327,7 +321,7 @@ parse_options() {
         print_help
         exit
         ;;
-      -v | --version)
+      -V | --version)
         echo "$program $version"
         exit
         ;;
@@ -348,7 +342,7 @@ parse_options() {
         shift 2
         ;;
       --conflicts)
-        provides=$2
+        conflicts=$2
         shift 2
         ;;
       --provides)
