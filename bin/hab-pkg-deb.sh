@@ -39,7 +39,8 @@ postrm=
 conflicts=
 provides=
 replaces=
-_safe_version=
+safe_name=
+safe_version=
 
 # Fail if there are any unset variables and whenever a command returns a
 # non-zero exit code.
@@ -132,8 +133,12 @@ build_deb() {
   pkg_maintainer=
   pkg_upstream_url=
 
+  # FIXME: This means you can only specify origin/name, not origin/name/version
+  #        or origin/name/release
+  install_dir="$(find "$staging_dir"/hab/pkgs/"$pkg"/*/* -maxdepth 0 -mindepth 0 -type d | tail -n 1)"
+
   # Read the manifest to extract variables from it
-  manifest="$(cat "$staging_dir"/hab/pkgs/"$pkg"/**/**/MANIFEST)"
+  manifest="$(cat "$install_dir/MANIFEST")"
 
   # TODO: Handle multi-line descriptions
   # FIXME: This probably fail when there's a ":" in them
@@ -143,12 +148,15 @@ build_deb() {
   pkg_upstream_url="$(grep __Upstream\ URL__: <<< "$manifest" | cut -d ":" -f2 | sed 's/^ *//g')"
 
 	# Get the ident and the origin and release from that
-  ident="$(cat "$staging_dir"/hab/pkgs/"$pkg"/**/**/IDENT)"
+  ident="$(cat "$install_dir/IDENT")"
 
   pkg_origin="$(echo "$ident" | cut -f1 -d/)"
   pkg_name="$(echo "$ident" | cut -f2 -d/)"
   pkg_version="$(echo "$ident" | cut -f3 -d/)"
   pkg_release="$(echo "$ident" | cut -f4 -d/)"
+
+  convert_name
+  convert_version
 
   # Write the control file
   render_control_file > "$staging_dir/DEBIAN/control"
@@ -161,7 +169,7 @@ build_deb() {
 
   # Create the package
   dpkg-deb -z9 -Zgzip --debug --build "$staging_dir" \
-		"$(safe_base_package_name)_$(safe_version)-${pkg_release}_$(architecture).deb"
+		"${safe_name}_$safe_version-${pkg_release}_$(architecture).deb"
 }
 
 # Output the contents of the "control" file
@@ -169,8 +177,8 @@ render_control_file() {
 # TODO: Depends/conflicts/provides, etc. See https://www.debian.org/doc/debian-policy/ch-relationships.html
 # TODO: Should vendor be the origin or not?
 control=$(cat <<EOF
-Package: $(safe_base_package_name)
-Version: $(safe_version)-$pkg_release
+Package: $safe_name
+Version: $safe_version-$pkg_release
 Vendor: $pkg_origin
 Architecture: $(architecture)
 Installed-Size: $(installed_size)
@@ -235,30 +243,24 @@ render_md5sums() {
 
 # The name converted to all lowercase to be compatible with Debian naming
 # conventions
-safe_base_package_name() {
-  echo "${pkg_origin,,}-${pkg_name,,}"
+convert_name() {
+  safe_name="${pkg_origin,,}-${pkg_name,,}"
 }
 
 # Return the Debian-ready version, replacing all dashes (-) with tildes
 # (~) and converting any invalid characters to underscores (_).
-safe_version() {
-  if [[ -n "$_safe_version" ]]; then
-    echo "$_safe_version"
-    return 0
-  fi
-
+convert_version() {
   if [[ $pkg_version == *"-"* ]]; then
-    _safe_version="${pkg_version//-/\~}"
+    safe_version="${pkg_version//-/\~}"
     warn "Dashes hold special significance in the Debian package versions. "
     warn "Versions that contain a dash and should be considered an earlier "
     warn "version (e.g. pre-releases) may actually be ordered as later "
     warn "(e.g. 12.0.0-rc.6 > 12.0.0). We'll work around this by replacing "
     warn "dashes (-) with tildes (~). Converting '$pkg_version' "
-    warn "to '$_safe_version'."
+    warn "to '$safe_version'."
 	else
-    _safe_version="$pkg_version"
+    safe_version="$pkg_version"
 	fi
-  echo "$_safe_version"
 }
 
 write_scripts() {
