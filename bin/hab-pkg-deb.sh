@@ -133,9 +133,7 @@ build_deb() {
   pkg_maintainer=
   pkg_upstream_url=
 
-  # FIXME: This means you can only specify origin/name, not origin/name/version
-  #        or origin/name/release
-  install_dir="$(find "$staging_dir"/hab/pkgs/"$pkg"/*/* -maxdepth 0 -mindepth 0 -type d | tail -n 1)"
+  install_dir="$(hab pkg path "$pkg")"
 
   # Read the manifest to extract variables from it
   manifest="$(cat "$install_dir/MANIFEST")"
